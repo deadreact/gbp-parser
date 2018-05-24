@@ -1,0 +1,15 @@
+*.dat
+*.o
+*.obj
+*.exe
+*.ini
+*.user
+*.sublime-project
+*.sublime-workspace
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*.so
+*.so.*
+.idea
+sublime-project/
