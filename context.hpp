@@ -19,7 +19,9 @@ namespace gbp
         EnumValue,
         Namespace,
         Global,
-        ExtraCode
+        ExtraCode,
+        Preproc,
+        Typedef
     };
 
 
@@ -27,19 +29,20 @@ namespace gbp
 
     inline bool isFinished(QStringRef ref, ContextType current)
     {
-        if (current == ContextType::Comment) {
+        switch (current) {
+        case ContextType::Comment:
             return ref.endsWith("*/");
-        }
-        if (current == ContextType::LineComment) {
+        case ContextType::LineComment:
+        case ContextType::Preproc:
+        case ContextType::Typedef:
             return ref.endsWith("\n");
-        }
-        if (current == ContextType::Namespace) {
+        case ContextType::Namespace:
             return ref.endsWith("}");
-        }
-        if (current == ContextType::Global) {
+        case ContextType::Global:
             return ref.endsWith("\0");
+        default:
+            return ref.endsWith(")");
         }
-        return ref.endsWith(")");
     }
 
     class Context
@@ -82,6 +85,8 @@ namespace gbp
             case ContextType::Namespace:   return "Namespace";
             case ContextType::Global:      return "Global";
             case ContextType::ExtraCode:   return "ExtraCode";
+            case ContextType::Preproc:     return "Preproc";
+            case ContextType::Typedef:     return "Typedef";
             default:
                 return QString();
             }

@@ -187,7 +187,6 @@ namespace gbp
         case ContextType::Global:
         case ContextType::Namespace:
         {
-//            if (QRegularExpression("namespace [a-zA-Z_][a-zA-Z0-9_]*( *|\\n*)*{$").match(ref).hasMatch()) {
             if (ref.endsWith("namespace")) {
                 return ContextType::Namespace;
             }
