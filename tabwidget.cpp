@@ -55,7 +55,7 @@ TabWidget::TabWidget(QWidget *parent)
     m_impl->m_model = new ContextModel(m_impl->m_parser.globalContext(), this);
     m_impl->treeView->setModel(m_impl->m_model);
 
-    connect(m_impl->m_codegen, &CodeGen::codeChanged, m_impl->codegenBrowser, &QTextBrowser::setPlainText);
+    connect(m_impl->m_codegen, &CodeGen::declCodeChanged, m_impl->codegenBrowser, &QTextBrowser::setPlainText);
 
     m_impl->m_codegen->setModel(m_impl->m_model);
 

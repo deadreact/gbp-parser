@@ -185,6 +185,12 @@ namespace gbp
 
         switch (current) {
         case ContextType::Global:
+        {
+            if (ref.endsWith("#")) {
+                return ContextType::Preproc;
+            }
+            Q_FALLTHROUGH();
+        }
         case ContextType::Namespace:
         {
             if (ref.endsWith("namespace")) {
@@ -199,6 +205,9 @@ namespace gbp
             }
             if (ref.endsWith("GBP_DECLARE_ENUM(") || ref.endsWith("GBP_DECLARE_ENUM_SIMPLE(")) {
                 return ContextType::Enum;
+            }
+            if (ref.endsWith("typedef")) {
+                return ContextType::Typedef;
             }
         }
         default:

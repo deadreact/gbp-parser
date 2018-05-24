@@ -55,6 +55,10 @@ namespace
                        "template <typename F> inline bool compare(const %0& obj, F&& f) {\nbool result = false;\n%1\nreturn result;\n}\n").arg(classname).arg(cmpBlocks.join("\n"));
     }
 
+    QString genSerialize(const QStringList& memberNames) {
+        return QString("\ntemplate<typename Archive>\nvoid serialize(Archive &ar) { ar %1; }\n").arg(memberNames.join(" & "));
+    }
+
 } //namespace
 
 /**
@@ -156,14 +160,12 @@ gbp::Context* getMemTypeContext(gbp::Context* c)
 struct CodeGen::Impl
 {
     ContextModel* m_model;
-    QString m_code;
+    Code m_code;
 
     Impl()
         : m_model(nullptr)
         , m_code()
-    {
-
-    }
+    {}
 
     void disconnectFromModel(CodeGen* owner)
     {
@@ -183,29 +185,46 @@ struct CodeGen::Impl
         }
     }
 
-    QString contextToCode(gbp::Context* context, QString prefix = "")
+    Code contextToCode(gbp::Context* context, QString prefix = "")
     {
         switch (context->type()) {
+        case gbp::ContextType::Preproc:
+        case gbp::ContextType::Typedef:
         case gbp::ContextType::Global:
         {
-            QStringList lst;
+            QStringList decl;
+            QStringList impl;
             for (gbp::Context* child: context->children()) {
-                lst << contextToCode(child, prefix + "    ");
+                auto code = contextToCode(child);
+                if (!code.decl.isEmpty()) {
+                    decl << code.decl;
+                }
+                if (!code.impl.isEmpty()) {
+                    impl << code.impl;
+                }
             }
-            return prefix + lst.join('\n');
+            return Code(decl.join('\n'), impl.join('\n'));
         }
         case gbp::ContextType::Namespace:
         {
-            QStringList lst;
+            QStringList decl;
+            QStringList impl;
             for (gbp::Context* child: context->children()) {
-
-                lst << contextToCode(child, prefix + "    ");
+                auto code = contextToCode(child);
+                if (!code.decl.isEmpty()) {
+                    decl << code.decl;
+                }
+                if (!code.impl.isEmpty()) {
+                    impl << code.impl;
+                }
             }
-            return prefix + QString(codeTmpNamespace).arg(context->name()).arg(lst.join('\n'));
+            return Code(QString(codeTmpNamespace).arg(context->name()).arg(decl.join('\n'))
+                      , QString(codeTmpNamespace).arg(context->name()).arg(impl.join('\n')));
         }
         case gbp::ContextType::Struct:
         {
-            QStringList structs;
+            QStringList structsDecl;
+            QStringList structsImpl;
             QStringList members;
             QString operators;
             QString extra;
@@ -215,13 +234,22 @@ struct CodeGen::Impl
 
             for (gbp::Context* child: context->children()) {
                 if (child->type() == gbp::ContextType::Member) {
-                    members << contextToCode(child, prefix + "    ");
-                    memberTypes << contextToCode(getMemTypeContext(child));
+                    members << contextToCode(child, prefix + "    ").decl;
+                    memberTypes << contextToCode(getMemTypeContext(child)).decl;
                     memberNames << child->name();
                 } else if (child->type() == gbp::ContextType::Struct || child->type() == gbp::ContextType::Enum) {
-                    structs << contextToCode(child, prefix + "    ");
+                    auto code = contextToCode(child);
+                    if (!code.decl.isEmpty()) {
+                        structsDecl << code.decl;
+                    }
+                    if (!code.impl.isEmpty()) {
+                        structsImpl << code.impl;
+                    }
                 }
             }
+
+            operators += genSerialize(memberNames);
+
             extra += QString("using types_as_tuple = std::tuple<%0>;\n").arg(memberTypes.join(", "));
             extra += genEqOperator(context->name(), memberNames);
             extra += QString("inline bool operator!=(const %0& other) const { return !operator==(other); }\n").arg(context->name());
@@ -245,13 +273,14 @@ struct CodeGen::Impl
                 genOutside = "";
             }
 
-            return prefix + formatString(codeTmpStruct
+            return Code(prefix + formatString(codeTmpStruct
                                        , context->name()
-                                       , structs.join('\n') + "\n" + members.join('\n')
+                                       , structsDecl.join('\n') + "\n" + members.join('\n')
                                        , operators
                                        , extra
                                        , context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""
-                                       , genOutside);
+                                       , genOutside)
+                             , QString());
         }
         case gbp::ContextType::Enum:
         {
@@ -260,15 +289,16 @@ struct CodeGen::Impl
 
             for (gbp::Context* child: context->children()) {
                 if (child->type() == gbp::ContextType::EnumValue) {
-                    members << contextToCode(child, prefix + "    ");
+                    members << contextToCode(child).decl;
                 }
             }
 
-            return prefix + formatString(codeTmpEnum
+            return Code(prefix + formatString(codeTmpEnum
                                        , context->name()
                                        , underlyingType
                                        , members.join(",\n")
-                                       , context->parent()->type() == gbp::ContextType::Struct ? "friend " : "");
+                                       , context->parent()->type() == gbp::ContextType::Struct ? "friend " : "")
+                             , QString());
         }
         case gbp::ContextType::Member:
         {
@@ -277,29 +307,29 @@ struct CodeGen::Impl
 
             for (gbp::Context* child: context->children()) {
                 if (child->type() == gbp::ContextType::MemberType) {
-                    memType = contextToCode(child, prefix);
+                    memType = contextToCode(child).decl;
                 } else if (child->type() == gbp::ContextType::MemberValue) {
-                    memVal = " = " + contextToCode(child) + ";";
+                    memVal = " = " + contextToCode(child).decl + ";";
                 } else {
                     Q_UNREACHABLE();
                 }
             }
 
-            return prefix + QString(codeTmpDeclMember).arg(context->name()).arg(memType).arg(memVal).simplified();
+            return Code(prefix + QString(codeTmpDeclMember).arg(context->name()).arg(memType).arg(memVal).simplified(), QString());
         }
         case gbp::ContextType::EnumValue:
-            return context->content().toString().replace(",", "=");
+            return Code(context->content().toString().replace(",", "="), QString());
         case gbp::ContextType::MemberType:
         case gbp::ContextType::MemberValue:
         case gbp::ContextType::ExtraCode:
-            return context->content().toString();
+            return Code(context->content().toString(), QString());
         case gbp::ContextType::Comment:
-            return prefix + QString("/*%0*/").arg(context->content());
+            return Code(prefix + QString("/*%0*/").arg(context->content()), QString());
         case gbp::ContextType::LineComment:
-            return prefix + QString("//%0\n").arg(context->content());
+            return Code(prefix + QString("//%0\n").arg(context->content()), QString());
         case gbp::ContextType::None:
         default:
-            return QString();
+            return Code("", "");
         }
     }
 };
@@ -329,13 +359,17 @@ ContextModel *CodeGen::model() const {
     return m_impl->m_model;
 }
 
-const QString &CodeGen::code() const {
-    return m_impl->m_code;
+const QString &CodeGen::declCode() const {
+    return m_impl->m_code.decl;
+}
+
+const QString &CodeGen::implCode() const {
+    return m_impl->m_code.impl;
 }
 
 void CodeGen::generateCode()
 {
-    QString newCode;
+    Code newCode;
 
     if (m_impl->m_model)
     {
@@ -344,9 +378,14 @@ void CodeGen::generateCode()
         }
     }
 
-    if (newCode != m_impl->m_code)
+    if (newCode.decl != m_impl->m_code.decl)
     {
-        m_impl->m_code = newCode;
-        emit codeChanged(newCode);
+        m_impl->m_code.decl = newCode.decl;
+        emit declCodeChanged(newCode.decl);
+    }
+    if (newCode.impl != m_impl->m_code.impl)
+    {
+        m_impl->m_code.impl = newCode.impl;
+        emit declCodeChanged(newCode.impl);
     }
 }
