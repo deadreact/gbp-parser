@@ -21,15 +21,18 @@ struct TabWidget::Impl : Ui_TabWidget
     gbp::Parser m_parser;
     ContextModel* m_model;
     CodeGen* m_codegen;
+    CodeGen* m_codegenFragment;
 
     Impl()
         : Ui_TabWidget()
         , m_parser()
         , m_model(nullptr)
         , m_codegen(new CodeGen)
+        , m_codegenFragment(new CodeGen)
     {}
     ~Impl()
     {
+        delete m_codegenFragment;
         delete m_codegen;
     }
 
@@ -55,9 +58,13 @@ TabWidget::TabWidget(QWidget *parent)
     m_impl->m_model = new ContextModel(m_impl->m_parser.globalContext(), this);
     m_impl->treeView->setModel(m_impl->m_model);
 
-    connect(m_impl->m_codegen, &CodeGen::declCodeChanged, m_impl->codegenBrowser, &QTextBrowser::setPlainText);
+    connect(m_impl->m_codegen, &CodeGen::declCodeChanged, m_impl->codegenBrowser_decl, &QTextBrowser::setPlainText);
+    connect(m_impl->m_codegen, &CodeGen::implCodeChanged, m_impl->codegenBrowser_impl, &QTextBrowser::setPlainText);
+    connect(m_impl->m_codegenFragment, &CodeGen::declCodeChanged, m_impl->codegenBrowser_fragment_decl, &QTextBrowser::setPlainText);
+    connect(m_impl->m_codegenFragment, &CodeGen::implCodeChanged, m_impl->codegenBrowser_fragment_impl, &QTextBrowser::setPlainText);
 
     m_impl->m_codegen->setModel(m_impl->m_model);
+    m_impl->m_codegenFragment->setModel(m_impl->m_model);
 
     if (gbp::Context* c = m_impl->m_parser.globalContext()) {
         m_impl->codeBrowser->setText(c->content().toString());
@@ -66,10 +73,6 @@ TabWidget::TabWidget(QWidget *parent)
     m_impl->codeBrowser->hide();
     connect(m_impl->codeBrowser, &QTextBrowser::textChanged, this, [this]{
         m_impl->codeBrowser->setHidden(m_impl->codeBrowser->toPlainText().isEmpty());
-    });
-    m_impl->codegenBrowser->hide();
-    connect(m_impl->codegenBrowser, &QTextBrowser::textChanged, this, [this]{
-        m_impl->codegenBrowser->setHidden(m_impl->codegenBrowser->toPlainText().isEmpty());
     });
 
     connect(m_impl->m_model, &ContextModel::modelReset, this, [this]{
@@ -102,6 +105,7 @@ void TabWidget::changeEvent(QEvent *e)
 
 void TabWidget::on_treeView_currentChanged(const QModelIndex &index)
 {
+    m_impl->m_codegenFragment->setRootIndex(index);
     if (gbp::Context* c = m_impl->m_model->contextForIndex(index)) {
 //            m_impl->textBrowser->setFocus();
             QTextCursor txtCursor = m_impl->codeBrowser->textCursor();

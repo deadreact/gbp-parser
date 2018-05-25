@@ -12,7 +12,7 @@ struct Code {
         : decl()
         , impl()
     {}
-    Code(const QString& decl, const QString& impl)
+    Code(QString decl, QString impl = QString())
         : decl(decl)
         , impl(impl)
     {}
@@ -45,10 +45,10 @@ public:
     void setModel(ContextModel* m);
     ContextModel* model() const;
 
-    // кэп: для .h
-    const QString& declCode() const;
-    // кэп: для .cpp
-    const QString& implCode() const;
+    void setRootIndex(const QModelIndex& index);
+    QModelIndex rootIndex() const;
+
+    const Code& code() const;
 private slots:
     void generateCode();
 };

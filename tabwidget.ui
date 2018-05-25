@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1010</width>
-    <height>391</height>
+    <width>1091</width>
+    <height>584</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -180,10 +180,109 @@
         <number>700</number>
        </property>
       </widget>
-      <widget class="CodeBrowser" name="codegenBrowser">
-       <property name="wHint" stdset="0">
-        <number>700</number>
+      <widget class="QTabWidget" name="tabWidget">
+       <property name="styleSheet">
+        <string notr="true">QTabWidget {
+    border: none;
+}</string>
        </property>
+       <property name="currentIndex">
+        <number>0</number>
+       </property>
+       <widget class="QWidget" name="tab_decl">
+        <attribute name="title">
+         <string notr="true">.h</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="CodeBrowser" name="codegenBrowser_decl">
+           <property name="wHint" stdset="0">
+            <number>700</number>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="tab_impl">
+        <attribute name="title">
+         <string notr="true">.cpp</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout_2">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="CodeBrowser" name="codegenBrowser_impl">
+           <property name="wHint" stdset="0">
+            <number>700</number>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="tab_fragment">
+        <attribute name="title">
+         <string notr="true">fragment</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout_3">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="CodeBrowser" name="codegenBrowser_fragment_decl">
+           <property name="wHint" stdset="0">
+            <number>700</number>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="CodeBrowser" name="codegenBrowser_fragment_impl">
+           <property name="wHint" stdset="0">
+            <number>700</number>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
       </widget>
      </widget>
     </item>

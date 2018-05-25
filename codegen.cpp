@@ -2,6 +2,7 @@
 #include "context.hpp"
 #include "contextmodel.hpp"
 
+#include <qdebug.h>
 #include <qregularexpression.h>
 
 namespace
@@ -24,12 +25,22 @@ namespace
         return QString("inline bool operator==(const %0& other) const { return %1; }\n").arg(classname).arg(memCompares.join(" && "));
     }
 
+    QString genMemberName(const QString& classname, const QStringList& memberNames) {
+        QStringList specMethods;
+
+        for (int i = 0; i < memberNames.size(); i++) {
+            specMethods << QString("template <> const char* %1::member_name<%2>() { return \"%3\"; }").arg(classname).arg(i).arg(memberNames.at(i));
+        }
+
+        return specMethods.join("\n");
+    }
+
     QString genGetMember(const QString& classname, const QStringList& memberNames) {
         QStringList specMethods;
 
         for (int i = 0; i < memberNames.size(); i++) {
-            specMethods << QString("template <> inline typename std::tuple_element<%2, %1::types_as_tuple>::type& %1::get_member<%2>() { return %3; }").arg(classname).arg(i).arg(memberNames.at(i));
-            specMethods << QString("template <> inline const typename std::tuple_element<%2, %1::types_as_tuple>::type& %1::get_member<%2>() const { return %3; }").arg(classname).arg(i).arg(memberNames.at(i));
+            specMethods << QString("template <>       typename std::tuple_element<%2, %1::types_as_tuple>::type& %1::get_member<%2>()       { return %3; }").arg(classname).arg(i).arg(memberNames.at(i));
+            specMethods << QString("template <> const typename std::tuple_element<%2, %1::types_as_tuple>::type& %1::get_member<%2>() const { return %3; }").arg(classname).arg(i).arg(memberNames.at(i));
         }
 
         return specMethods.join("\n");
@@ -47,31 +58,78 @@ namespace
     QString genCompareMethod(const QString& classname, const QStringList& memberNames) {
         QStringList cmpBlocks;
 
-        for (const QString& memberName: memberNames) {
-            cmpBlocks << QString("if (%0 != obj.%0) { f(\"%0\", %0, obj.%0); result = true; }").arg(memberName);
+        QString cmpFuncSign = QString("template <typename F, typename T> inline callCmpFunc(const char* memberName, T& mem1, const T& mem2, F f) {\nf(memberName, mem1, mem2);}\n");
+        cmpFuncSign += QString("template <typename F, typename T> inline callCmpFunc(const char* memberName, const T& mem1, const T& mem2, F f) const {\nf(memberName, mem1, mem2);}\n");
+
+//        for (const QString& memberName: memberNames) {
+//            cmpBlocks << QString("if (%0 != obj.%0) { f(\"%0\", %0, obj.%0); result = true; }").arg(memberName);
+//        }
+        for (int i = 0; i < memberNames.size(); i++) {
+            cmpBlocks << QString("if (get_member<%0>() != obj.get_member<%0>()) { f(member_name<%0>(), get_member<%0>(), obj.get_member<%0>()); result = true; }").arg(i);
         }
 
-        return QString("template <typename F> inline bool compare(const %0& obj, F&& f) const {\nbool result = false;\n%1\nreturn result;\n}\n"
+        QString decl/* = cmpFuncSign*/;
+        decl += QString("template <typename F> inline bool compare(const %0& obj, F&& f) const {\nbool result = false;\n%1\nreturn result;\n}\n"
                        "template <typename F> inline bool compare(const %0& obj, F&& f) {\nbool result = false;\n%1\nreturn result;\n}\n").arg(classname).arg(cmpBlocks.join("\n"));
+        return decl;
     }
 
     QString genSerialize(const QStringList& memberNames) {
-        return QString("\ntemplate<typename Archive>\nvoid serialize(Archive &ar) { ar %1; }\n").arg(memberNames.join(" & "));
+        return QString("\ntemplate<typename Archive>\nvoid serialize(Archive &ar) { ar & %1; }\n").arg(memberNames.join(" & "));
+    }
+    Code genOstreamOp(const QString& classname, const QStringList& memberNames) {
+        QStringList membersToOs;
+
+        for (const QString& memberName: memberNames) {
+            membersToOs << QString("\"%0: \" << obj.%0").arg(memberName);
+        }
+
+        Code code;
+        code.decl = QString("std::ostream& operator<<(std::ostream& os, const %0& obj);\n").arg(classname);
+        code.impl = QString("std::ostream& operator<<(std::ostream& os, const %0& obj) {\n"
+                            "    os << \"{\" << %1 << \"}\";\n"
+                            "    return os;\n"
+                            "}\n").arg(classname).arg(membersToOs.join(" << \", \" << "));
+        return code;
+    }
+
+    Code genOstreamOpEnum(const QString& classname, const QStringList& memberNames) {
+//        QStringList membersToOs;
+        QStringList membersToEnumCast;
+
+        for (const QString& memberName: memberNames) {
+//            membersToOs << QString("case %0::%1: os << \"%1\"; break;").arg(classname).arg(memberName);
+            membersToEnumCast << QString("case %0::%1: return is_full_name ? \"%0::%1\" : \"%1\";").arg(classname).arg(memberName);
+        }
+
+        Code code;
+        code.decl = QString("const char* enum_cast(%0 e, bool is_full_name = false);\n").arg(classname);
+        code.decl += QString("std::ostream& operator<<(std::ostream& os, %0 e);\n").arg(classname);
+        code.impl = QString("const char* enum_cast(%0 e, bool is_full_name) {\n"
+                            "    switch (e) {\n"
+                            "    %1\n"
+                            "    }\n"
+                            "    return \"\";\n"
+                            "}\n").arg(classname).arg(membersToEnumCast.join("\n"));
+        code.impl = QString("std::ostream& operator<<(std::ostream& os, %0 e) {\n"
+                            "    os << enum_cast(e);\n"
+                            "    return os;\n"
+                            "}\n").arg(classname);
+        return code;
     }
 
 } //namespace
 
+constexpr static const char* codeTmpGuardsAdditional = "#ifdef GBP_DECLARE_TYPE_GEN_ADDITIONALS\n%0\n#endif //GBP_DECLARE_TYPE_GEN_ADDITIONALS\n";
 /**
  %0 - namespace name
  %1 - content
  */
 constexpr static const char* codeTmpNamespace =
-R"code(
-namespace %0
+R"code(namespace %0
 {
 %1
-}
-)code";
+} //namespace %0)code";
 
 /**
  %0 - struct name
@@ -82,8 +140,7 @@ namespace %0
  %5 - overloads outside the class
  */
 constexpr static const char* codeTmpStruct =
-R"code(
-struct %0
+R"code(struct %0
 {
     // methods
     %0() = default;
@@ -103,14 +160,7 @@ struct %0
 #endif //GBP_DECLARE_TYPE_GEN_ADDITIONALS
 };
 // related functions
-%4inline std::ostream& operator<<(std::ostream& os, const %0& arg) {
-    // FIXME: ostream operator
-    return os;
-}
-#ifdef GBP_DECLARE_TYPE_GEN_ADDITIONALS
-%5
-#endif //GBP_DECLARE_TYPE_GEN_ADDITIONALS
-)code";
+%4%5)code";
 
 /**
  %0 - enum name
@@ -119,22 +169,25 @@ struct %0
  %4 - friend if needed
  */
 constexpr static const char* codeTmpEnum =
-R"code(
-enum class %0 : %1
+R"code(enum class %0 : %1
 {
     %2
 };
 // related functions
-%4inline std::ostream& operator<<(std::ostream& os, %0 arg) {
-    // FIXME: ostream operator
-    return os;
-}
-%4inline const char* enum_cast(%0 val, bool full_name = false) {
-    // FIXME: implement me
-    static const char* str = "NOT IMPLEMENTED!!!";
-    return str;
-}
-)code";
+%4%5)code";
+
+/**
+ %0 - enum name
+ %2 - enum members
+ %4 - friend if needed
+ */
+constexpr static const char* codeTmpSimpleEnum =
+R"code(enum %0
+{
+    %2
+};
+// related functions
+%4%5)code";
 
 /**
  %0 - member name
@@ -142,9 +195,7 @@ enum class %0 : %1
  %2 - member initial value or just ';'
  */
 constexpr static const char* codeTmpDeclMember =
-R"code(
-%1 %0%2
-)code";
+R"code(%1 %0%2)code";
 
 gbp::Context* getMemTypeContext(gbp::Context* c)
 {
@@ -160,10 +211,12 @@ gbp::Context* getMemTypeContext(gbp::Context* c)
 struct CodeGen::Impl
 {
     ContextModel* m_model;
+    QModelIndex m_rootIndex;
     Code m_code;
 
     Impl()
         : m_model(nullptr)
+        , m_rootIndex()
         , m_code()
     {}
 
@@ -185,11 +238,13 @@ struct CodeGen::Impl
         }
     }
 
-    Code contextToCode(gbp::Context* context, QString prefix = "")
+    Code contextToCode(gbp::Context* context)
     {
         switch (context->type()) {
         case gbp::ContextType::Preproc:
+            return QString("#%0").arg(context->content());
         case gbp::ContextType::Typedef:
+            return QString("typedef %0").arg(context->content());
         case gbp::ContextType::Global:
         {
             QStringList decl;
@@ -210,16 +265,13 @@ struct CodeGen::Impl
             QStringList decl;
             QStringList impl;
             for (gbp::Context* child: context->children()) {
-                auto code = contextToCode(child);
-                if (!code.decl.isEmpty()) {
-                    decl << code.decl;
-                }
-                if (!code.impl.isEmpty()) {
-                    impl << code.impl;
-                }
+                Code code = contextToCode(child);
+                decl << code.decl;
+                impl << code.impl;
             }
-            return Code(QString(codeTmpNamespace).arg(context->name()).arg(decl.join('\n'))
-                      , QString(codeTmpNamespace).arg(context->name()).arg(impl.join('\n')));
+            QString declstr = QString(codeTmpNamespace).arg(context->name()).arg(decl.join('\n'));
+            QString implstr = QString(codeTmpNamespace).arg(context->name()).arg(impl.join('\n'));
+            return Code(declstr, implstr);
         }
         case gbp::ContextType::Struct:
         {
@@ -234,7 +286,7 @@ struct CodeGen::Impl
 
             for (gbp::Context* child: context->children()) {
                 if (child->type() == gbp::ContextType::Member) {
-                    members << contextToCode(child, prefix + "    ").decl;
+                    members << contextToCode(child).decl;
                     memberTypes << contextToCode(getMemTypeContext(child)).decl;
                     memberNames << child->name();
                 } else if (child->type() == gbp::ContextType::Struct || child->type() == gbp::ContextType::Enum) {
@@ -257,30 +309,38 @@ struct CodeGen::Impl
             extra += QString("template <int N> typename std::tuple_element<N, types_as_tuple>::type& get_member();\n");
             extra += QString("template <int N> const typename std::tuple_element<N, types_as_tuple>::type& get_member() const;\n");
 
+            extra += QString("template <int N> static const char* member_name();\n");
+
             extra += genApplyMethod(memberNames);
             extra += genCompareMethod(context->name(), memberNames);
 
-            QString genOutside = genGetMember(context->name(), memberNames);
-            static QString genOutsideUpper;
+            QString getMemberImpl = genMemberName(context->name(), memberNames);
+            getMemberImpl += "\n" + genGetMember(context->name(), memberNames);
+//            static QString genOutsideUpper;
 
-            if (!genOutsideUpper.isEmpty()) {
-                genOutside += genOutsideUpper;
-                genOutsideUpper = "";
+//            if (!genOutsideUpper.isEmpty()) {
+//                genOutside += genOutsideUpper;
+//                genOutsideUpper = "";
+//            }
+            QString fullName = context->name();
+            for (gbp::Context* currContext = context;
+                 currContext->parent() && currContext->parent()->type() == gbp::ContextType::Struct;
+                 currContext = currContext->parent())
+            {
+                getMemberImpl = getMemberImpl.replace(currContext->name() + "::", currContext->parent()->name() + "::" + currContext->name() + "::");
+                fullName = currContext->parent()->name() + "::" + fullName;
             }
 
-            if (context->parent()->type() ==  gbp::ContextType::Struct) {
-                genOutsideUpper = genOutside.replace(context->name() + "::", context->parent()->name() + "::" + context->name() + "::");
-                genOutside = "";
-            }
+            Code ostreamOp = genOstreamOp(fullName, memberNames);
 
-            return Code(prefix + formatString(codeTmpStruct
-                                       , context->name()
-                                       , structsDecl.join('\n') + "\n" + members.join('\n')
-                                       , operators
-                                       , extra
-                                       , context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""
-                                       , genOutside)
-                             , QString());
+            return Code(formatString(codeTmpStruct
+                               , context->name()
+                               , structsDecl.join('\n') + "\n" + members.join('\n')
+                               , operators
+                               , extra
+                               , context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""
+                               , ostreamOp.decl)
+                       , QString(codeTmpGuardsAdditional).arg(getMemberImpl) + "\n" + structsImpl.join("\n") + ostreamOp.impl);
         }
         case gbp::ContextType::Enum:
         {
@@ -293,12 +353,23 @@ struct CodeGen::Impl
                 }
             }
 
-            return Code(prefix + formatString(codeTmpEnum
-                                       , context->name()
-                                       , underlyingType
-                                       , members.join(",\n")
-                                       , context->parent()->type() == gbp::ContextType::Struct ? "friend " : "")
-                             , QString());
+            QString fullName = context->name();
+            for (gbp::Context* currContext = context;
+                 currContext->parent() && currContext->parent()->type() == gbp::ContextType::Struct;
+                 currContext = currContext->parent())
+            {
+                fullName = currContext->parent()->name() + "::" + fullName;
+            }
+
+            Code ostreamOp = genOstreamOpEnum(fullName, members);
+
+            return Code(formatString(codeTmpEnum
+                                   , context->name()
+                                   , underlyingType
+                                   , members.join(",\n")
+                                   , context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""
+                                   , ostreamOp.decl)
+                    , ostreamOp.impl);
         }
         case gbp::ContextType::Member:
         {
@@ -315,21 +386,21 @@ struct CodeGen::Impl
                 }
             }
 
-            return Code(prefix + QString(codeTmpDeclMember).arg(context->name()).arg(memType).arg(memVal).simplified(), QString());
+            return QString(codeTmpDeclMember).arg(context->name()).arg(memType).arg(memVal).simplified();
         }
         case gbp::ContextType::EnumValue:
-            return Code(context->content().toString().replace(",", "="), QString());
+            return context->content().toString().replace(",", "=");
         case gbp::ContextType::MemberType:
         case gbp::ContextType::MemberValue:
         case gbp::ContextType::ExtraCode:
-            return Code(context->content().toString(), QString());
+            return context->content().toString();
         case gbp::ContextType::Comment:
-            return Code(prefix + QString("/*%0*/").arg(context->content()), QString());
+            return QString("/*%0*/").arg(context->content());
         case gbp::ContextType::LineComment:
-            return Code(prefix + QString("//%0\n").arg(context->content()), QString());
+            return QString("//%0\n").arg(context->content());
         case gbp::ContextType::None:
         default:
-            return Code("", "");
+            return Code();
         }
     }
 };
@@ -351,6 +422,10 @@ void CodeGen::setModel(ContextModel *m)
         m_impl->m_model = m;
         m_impl->connectToModel(this);
 
+        if (m_impl->m_rootIndex.isValid() && m_impl->m_rootIndex.model() != m) {
+            m_impl->m_rootIndex = QModelIndex();
+        }
+
         generateCode();
     }
 }
@@ -359,13 +434,22 @@ ContextModel *CodeGen::model() const {
     return m_impl->m_model;
 }
 
-const QString &CodeGen::declCode() const {
-    return m_impl->m_code.decl;
+void CodeGen::setRootIndex(const QModelIndex &index)
+{
+    if (m_impl->m_rootIndex != index) {
+        m_impl->m_rootIndex = index;
+        generateCode();
+    }
 }
 
-const QString &CodeGen::implCode() const {
-    return m_impl->m_code.impl;
+QModelIndex CodeGen::rootIndex() const {
+    return m_impl->m_rootIndex;
 }
+
+const Code& CodeGen::code() const {
+    return m_impl->m_code;
+}
+
 
 void CodeGen::generateCode()
 {
@@ -373,7 +457,11 @@ void CodeGen::generateCode()
 
     if (m_impl->m_model)
     {
-        if (gbp::Context* context = m_impl->m_model->context()) {
+        if (rootIndex().isValid()) {
+            if (gbp::Context* context = m_impl->m_model->contextForIndex(rootIndex())) {
+                newCode = m_impl->contextToCode(context);
+            }
+        } else if (gbp::Context* context = m_impl->m_model->context()) {
             newCode = m_impl->contextToCode(context);
         }
     }
@@ -386,6 +474,6 @@ void CodeGen::generateCode()
     if (newCode.impl != m_impl->m_code.impl)
     {
         m_impl->m_code.impl = newCode.impl;
-        emit declCodeChanged(newCode.impl);
+        emit implCodeChanged(newCode.impl);
     }
 }
