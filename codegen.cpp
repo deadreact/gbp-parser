@@ -85,7 +85,8 @@ namespace
         }
 
         Code code;
-        code.decl = QString("std::ostream& operator<<(std::ostream& os, const %0& obj);\n").arg(classname);
+        // %9 - friend if needed
+        code.decl = QString("%9std::ostream& operator<<(std::ostream& os, const %0& obj);\n").arg(classname);
         code.impl = QString("std::ostream& operator<<(std::ostream& os, const %0& obj) {\n"
                             "    os << \"{\" << %1 << \"}\";\n"
                             "    return os;\n"
@@ -103,8 +104,9 @@ namespace
         }
 
         Code code;
-        code.decl = QString("const char* enum_cast(%0 e, bool is_full_name = false);\n").arg(classname);
-        code.decl += QString("std::ostream& operator<<(std::ostream& os, %0 e);\n").arg(classname);
+        // %9 - friend if needed
+        code.decl = QString("%9const char* enum_cast(%0 e, bool is_full_name = false);\n").arg(classname);
+        code.decl += QString("%9std::ostream& operator<<(std::ostream& os, %0 e);\n").arg(classname);
         code.impl = QString("const char* enum_cast(%0 e, bool is_full_name) {\n"
                             "    switch (e) {\n"
                             "    %1\n"
@@ -136,7 +138,6 @@ R"code(namespace %0
  %1 - member declarations
  %2 - operators declarations
  %3 - extra code
- %4 - friend if needed
  %5 - overloads outside the class
  */
 constexpr static const char* codeTmpStruct =
@@ -160,13 +161,12 @@ R"code(struct %0
 #endif //GBP_DECLARE_TYPE_GEN_ADDITIONALS
 };
 // related functions
-%4%5)code";
+%5)code";
 
 /**
  %0 - enum name
  %1 - enum underlying type
  %2 - enum members
- %4 - friend if needed
  */
 constexpr static const char* codeTmpEnumClass =
 R"code(enum class %0 : %1
@@ -174,7 +174,7 @@ R"code(enum class %0 : %1
     %2
 };
 // related functions
-%4%5)code";
+%5)code";
 
 /**
  %0 - enum name
@@ -341,8 +341,7 @@ struct CodeGen::Impl
                                , structsDecl.join('\n') + "\n" + members.join('\n')
                                , operators
                                , extra
-                               , context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""
-                               , ostreamOp.decl)
+                               , ostreamOp.decl.arg(context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""))
                        , QString(codeTmpGuardsAdditional).arg(getMemberImpl) + "\n" + structsImpl.join("\n") + ostreamOp.impl);
         }
         case gbp::ContextType::Enum:
@@ -399,8 +398,7 @@ struct CodeGen::Impl
                                    , context->name()
                                    , underlyingType
                                    , members.join(",\n")
-                                   , context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""
-                                   , ostreamOp.decl)
+                                   , ostreamOp.decl.arg(context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""))
                     , ostreamOp.impl);
         }
         case gbp::ContextType::Member:
