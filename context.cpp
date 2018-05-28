@@ -88,6 +88,38 @@ namespace gbp
         }
     }
 
+    bool Context::hasConvertibleSymbols() const
+    {
+        switch (type()) {
+        case ContextType::Struct:
+        case ContextType::Member:
+        case ContextType::MemberType:
+        case ContextType::MemberValue:
+        case ContextType::Enum:
+        case ContextType::EnumClass:
+        case ContextType::UnderlyingType:
+        case ContextType::EnumItem:
+        case ContextType::Typedef:
+        case ContextType::Preproc:
+            return true;
+        case ContextType::None:
+        case ContextType::Comment:
+        case ContextType::LineComment:
+        case ContextType::Namespace:
+        case ContextType::Global:
+        case ContextType::ExtraCode:
+        default:
+            {
+                for (Context* child: m_children) {
+                    if (child->hasConvertibleSymbols()) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+    }
+
     const QString *Context::source() const {
         return parent() ? parent()->source() : nullptr;
     }

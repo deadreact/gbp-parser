@@ -74,6 +74,8 @@ namespace gbp
     public:
         virtual ~Context();
 
+        bool hasConvertibleSymbols() const;
+
         inline QString name() const { return m_name; }
         inline ContextType type() const { return m_type; }
 

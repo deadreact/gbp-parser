@@ -111,7 +111,7 @@ namespace
                             "    }\n"
                             "    return \"\";\n"
                             "}\n").arg(classname).arg(membersToEnumCast.join("\n"));
-        code.impl = QString("std::ostream& operator<<(std::ostream& os, %0 e) {\n"
+        code.impl += QString("std::ostream& operator<<(std::ostream& os, %0 e) {\n"
                             "    os << enum_cast(e);\n"
                             "    return os;\n"
                             "}\n").arg(classname);
@@ -240,6 +240,9 @@ struct CodeGen::Impl
 
     Code contextToCode(gbp::Context* context)
     {
+        if (!context->hasConvertibleSymbols()) {
+            return Code();
+        }
         switch (context->type()) {
         case gbp::ContextType::Preproc:
             return QString("#%0").arg(context->content());

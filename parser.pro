@@ -6,17 +6,23 @@ HEADERS += $$PWD/gbpparser.hpp \
            $$PWD/context.hpp \
     tabwidget.h \
     codegen.hpp \
-    contextmodel.hpp
+    contextmodel.hpp \
+    page.h \
+    checkedfileslist.hpp
 
 SOURCES += $$PWD/gbpparser.cpp \
            $$PWD/main.cpp \
            $$PWD/context.cpp \
     tabwidget.cpp \
     codegen.cpp \
-    contextmodel.cpp
+    contextmodel.cpp \
+    page.cpp \
+    checkedfileslist.cpp
 
 FORMS += \
-    tabwidget.ui
+    page.ui \
+    tabwidget.ui \
+    checkedfileslist.ui
 
 TARGET = parser
 DESTDIR = $$PWD
