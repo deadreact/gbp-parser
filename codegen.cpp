@@ -187,7 +187,7 @@ R"code(enum %0
     %1
 };
 // related functions
-%2%3)code";
+%3)code";
 
 /**
  %0 - member name
@@ -367,8 +367,7 @@ struct CodeGen::Impl
             return Code(formatString(codeTmpSimpleEnum
                                    , context->name()
                                    , members.join(",\n")
-                                   , context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""
-                                   , ostreamOp.decl)
+                                   , ostreamOp.decl.arg(context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""))
                     , ostreamOp.impl);
         }
         case gbp::ContextType::EnumClass:

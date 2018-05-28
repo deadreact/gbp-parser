@@ -190,6 +190,7 @@ R"(TEMPLATE = lib
 CONFIG += c++17
 CONFIG += staticlib
 TARGET = gbp-api
+INCLUDEPATH += $$PWD/..
 include($$PWD/api-gen.pri))";
         proFile.commit();
     }
