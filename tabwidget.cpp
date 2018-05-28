@@ -7,7 +7,7 @@
 #include <QLineEdit>
 #include <QFileDialog>
 
-const char* path = "G:\\_msys64_\\home\\Deadreact\\ultima_poker-client\\common\\api\\lobby_stat\\types.h";
+const char* path = "C:\\_msys64_\\home\\deadreact\\ultima_poker-client\\common\\api\\lobby_stat\\types.h";
 
 
 void TreeView::currentChanged(const QModelIndex &current, const QModelIndex &previous)

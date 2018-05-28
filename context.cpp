@@ -15,7 +15,8 @@ namespace gbp
         case ContextType::Struct:
         case ContextType::Member:
         case ContextType::Enum:
-        case ContextType::EnumValue:
+        case ContextType::EnumClass:
+        case ContextType::EnumItem:
         case ContextType::Namespace:
         {
             int pos = stringRef.position() + stringRef.size();
@@ -32,6 +33,7 @@ namespace gbp
             }
             return QStringRef(stringRef.string(), pos, it - itBegin);
         }
+        case ContextType::UnderlyingType:
         case ContextType::MemberType:
         {
             QVector<QChar> filter({'_', ':', ' ', '*', '&', '<', '>'});
@@ -203,7 +205,10 @@ namespace gbp
             if (ref.endsWith("GBP_DECLARE_TYPE(")) {
                 return ContextType::Struct;
             }
-            if (ref.endsWith("GBP_DECLARE_ENUM(") || ref.endsWith("GBP_DECLARE_ENUM_SIMPLE(")) {
+            if (ref.endsWith("GBP_DECLARE_ENUM(")) {
+                return ContextType::EnumClass;
+            }
+            if (ref.endsWith("GBP_DECLARE_ENUM_SIMPLE(")) {
                 return ContextType::Enum;
             }
             if (ref.endsWith("typedef")) {
@@ -214,18 +219,25 @@ namespace gbp
             break;
         }
 
+        if (current == ContextType::EnumClass && currentContext->children().isEmpty() && ref.endsWith(",")) {
+            return ContextType::UnderlyingType;
+        }
+
         if (current == ContextType::Struct)
         {
             if (ref.endsWith("(")) {
                 return ContextType::Member;
             }
+//            if (!currentContext->children().isEmpty() && ref.endsWith(",")) {
+//                return ContextType::ExtraCode;
+//            }
             return ContextType::None;
         }
 
-        if (current == ContextType::Enum)
+        if (current == ContextType::EnumClass || current == ContextType::Enum)
         {
             if (ref.endsWith("(")) {
-                return ContextType::EnumValue;
+                return ContextType::EnumItem;
             }
             return ContextType::None;
         }

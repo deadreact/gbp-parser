@@ -19,3 +19,4 @@ FORMS += \
     tabwidget.ui
 
 TARGET = parser
+DESTDIR = $$PWD

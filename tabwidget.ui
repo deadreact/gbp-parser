@@ -98,6 +98,13 @@
        <enum>Qt::Horizontal</enum>
       </property>
       <widget class="TreeView" name="treeView">
+       <property name="styleSheet">
+        <string notr="true">QAbstractItemView {
+    background-color: #272822;
+	alternate-background-color: #2a2b25;
+    color: #fafafa;
+}</string>
+       </property>
        <property name="sizeAdjustPolicy">
         <enum>QAbstractScrollArea::AdjustToContents</enum>
        </property>

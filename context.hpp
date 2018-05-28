@@ -16,7 +16,9 @@ namespace gbp
         MemberType,
         MemberValue,
         Enum,
-        EnumValue,
+        EnumClass,
+        UnderlyingType,
+        EnumItem,
         Namespace,
         Global,
         ExtraCode,
@@ -36,10 +38,14 @@ namespace gbp
         case ContextType::Preproc:
         case ContextType::Typedef:
             return ref.endsWith("\n");
+        case ContextType::UnderlyingType:
+            return ref.endsWith(",");
         case ContextType::Namespace:
             return ref.endsWith("}");
         case ContextType::Global:
             return ref.endsWith("\0");
+//        case ContextType::ExtraCode:
+//            return QStringRef(ref.string(), ref.position(), ref.size() + 1).endsWith(')');
         default:
             return ref.endsWith(")");
         }
@@ -73,20 +79,22 @@ namespace gbp
 
         inline QString typeString() const {
             switch (type()) {
-            case ContextType::None:        return "None";
-            case ContextType::Comment:     return "Comment";
-            case ContextType::LineComment: return "LineComment";
-            case ContextType::Struct:      return "Struct";
-            case ContextType::Member:      return "Member";
-            case ContextType::MemberType:  return "MemberType";
-            case ContextType::MemberValue: return "MemberValue";
-            case ContextType::Enum:        return "Enum";
-            case ContextType::EnumValue:   return "EnumValue";
-            case ContextType::Namespace:   return "Namespace";
-            case ContextType::Global:      return "Global";
-            case ContextType::ExtraCode:   return "ExtraCode";
-            case ContextType::Preproc:     return "Preproc";
-            case ContextType::Typedef:     return "Typedef";
+            case ContextType::None:           return "None";
+            case ContextType::Comment:        return "Comment";
+            case ContextType::LineComment:    return "LineComment";
+            case ContextType::Struct:         return "Struct";
+            case ContextType::Member:         return "Member";
+            case ContextType::MemberType:     return "MemberType";
+            case ContextType::MemberValue:    return "MemberValue";
+            case ContextType::Enum:           return "Enum";
+            case ContextType::EnumClass:      return "EnumClass";
+            case ContextType::UnderlyingType: return "UnderlyingType";
+            case ContextType::EnumItem:       return "EnumItem";
+            case ContextType::Namespace:      return "Namespace";
+            case ContextType::Global:         return "Global";
+            case ContextType::ExtraCode:      return "ExtraCode";
+            case ContextType::Preproc:        return "Preproc";
+            case ContextType::Typedef:        return "Typedef";
             default:
                 return QString();
             }

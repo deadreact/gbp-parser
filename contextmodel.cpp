@@ -108,19 +108,26 @@ QVariant ContextModel::data(const QModelIndex &index, int role) const
         switch (c->type()) {
         case ContextType::Comment:
         case ContextType::LineComment:
-            return QColor(0x008000);
+            return QColor(0x75715e);
         case ContextType::Struct:
         case ContextType::Enum:
-            return QColor(0xf92672);
+        case ContextType::EnumClass:
+            return QColor(0xf92660);
         case ContextType::Member:
-            return QColor(0x800000);
+//            return QColor(0xe99720);
+            return QColor(0xfafafa);
         case ContextType::MemberType:
-            return QColor(0x66d9ef);
+        case ContextType::UnderlyingType:
+            return QColor(0x98e22d);
         case ContextType::MemberValue:
-        case ContextType::EnumValue:
-            return QColor(0x191919);
+        case ContextType::EnumItem:
+            return QColor(0xe99720);
+        case ContextType::Preproc:
+            return QColor(0xe99720);
         case ContextType::Namespace:
-            return QColor(0xaa0000);
+            return QColor(0xf92660);
+        case ContextType::Typedef:
+            return QColor(0x66d9ef);
         case ContextType::Global:
         case ContextType::None:
         default:
