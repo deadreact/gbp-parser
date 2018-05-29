@@ -12,6 +12,7 @@ namespace gbp
         Comment,
         LineComment,
         Struct,
+        DeclStruct,
         Member,
         MemberType,
         MemberValue,
@@ -42,6 +43,8 @@ namespace gbp
             return ref.endsWith(",");
         case ContextType::Namespace:
             return ref.endsWith("}");
+        case ContextType::Struct:
+            return ref.endsWith("};");
         case ContextType::Global:
             return ref.endsWith("\0");
 //        case ContextType::ExtraCode:
@@ -84,7 +87,8 @@ namespace gbp
             case ContextType::None:           return "None";
             case ContextType::Comment:        return "Comment";
             case ContextType::LineComment:    return "LineComment";
-            case ContextType::Struct:         return "Struct";
+            case ContextType::Struct:         return "GuessedInterface";
+            case ContextType::DeclStruct:     return "Struct";
             case ContextType::Member:         return "Member";
             case ContextType::MemberType:     return "MemberType";
             case ContextType::MemberValue:    return "MemberValue";

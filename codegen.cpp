@@ -197,6 +197,10 @@ R"code(enum %0
 constexpr static const char* codeTmpDeclMember =
 R"code(%1 %0%2)code";
 
+bool isStruct(gbp::Context* c) {
+    return c && (c->type() == gbp::ContextType::DeclStruct || c->type() == gbp::ContextType::Struct);
+}
+
 gbp::Context* getMemTypeContext(gbp::Context* c)
 {
     Q_ASSERT(c->type() == gbp::ContextType::Member);
@@ -278,6 +282,28 @@ struct CodeGen::Impl
         }
         case gbp::ContextType::Struct:
         {
+            QString content = context->content().toString();
+            QStringList childrenContentsAsIs;
+            QStringList childrenContentsDecl;
+            QStringList childrenContentsImpl;
+            for (gbp::Context* child: context->children()) {
+                if (!child->content().isEmpty())
+                {
+                    childrenContentsAsIs << "(" + child->content().toString() + ")";
+                    Code code = contextToCode(child);
+                    childrenContentsDecl << code.decl;
+                    childrenContentsImpl << code.impl;
+                }
+            }
+            for (int i = 0; i < childrenContentsAsIs.size(); i++) {
+                content.replace(childrenContentsAsIs.at(i), childrenContentsDecl.at(i));
+            }
+            content.remove("GBP_DECLARE_TYPE").remove("GBP_DECLARE_ENUM").remove("GBP_DECLARE_ENUM_SIMPLE");
+
+            return Code(QString("struct %0;").arg(content), childrenContentsImpl.join("\n"));
+        }
+        case gbp::ContextType::DeclStruct:
+        {
             QStringList structsDecl;
             QStringList structsImpl;
             QStringList members;
@@ -292,7 +318,7 @@ struct CodeGen::Impl
                     members << contextToCode(child).decl;
                     memberTypes << contextToCode(getMemTypeContext(child)).decl;
                     memberNames << child->name();
-                } else if (child->type() == gbp::ContextType::Struct || child->type() == gbp::ContextType::Enum || child->type() == gbp::ContextType::EnumClass) {
+                } else if (child->type() == gbp::ContextType::DeclStruct || child->type() == gbp::ContextType::Enum || child->type() == gbp::ContextType::EnumClass) {
                     auto code = contextToCode(child);
                     if (!code.decl.isEmpty()) {
                         structsDecl << code.decl;
@@ -305,7 +331,7 @@ struct CodeGen::Impl
 
             operators += genSerialize(memberNames);
 
-            extra += QString("using types_as_tuple = std::tuple<%0>;\n").arg(memberTypes.join(", "));
+            operators += QString("using types_as_tuple = std::tuple<%0>;\n").arg(memberTypes.join(", "));
             extra += genEqOperator(context->name(), memberNames);
             extra += QString("inline bool operator!=(const %0& other) const { return !operator==(other); }\n").arg(context->name());
 
@@ -325,10 +351,9 @@ struct CodeGen::Impl
 //                genOutside += genOutsideUpper;
 //                genOutsideUpper = "";
 //            }
+
             QString fullName = context->name();
-            for (gbp::Context* currContext = context;
-                 currContext->parent() && currContext->parent()->type() == gbp::ContextType::Struct;
-                 currContext = currContext->parent())
+            for (gbp::Context* currContext = context; isStruct(currContext->parent()); currContext = currContext->parent())
             {
                 getMemberImpl = getMemberImpl.replace(currContext->name() + "::", currContext->parent()->name() + "::" + currContext->name() + "::");
                 fullName = currContext->parent()->name() + "::" + fullName;
@@ -341,22 +366,30 @@ struct CodeGen::Impl
                                , structsDecl.join('\n') + "\n" + members.join('\n')
                                , operators
                                , extra
-                               , ostreamOp.decl.arg(context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""))
+                               , ostreamOp.decl.arg(context->parent()->type() == gbp::ContextType::DeclStruct ? "friend " : ""))
                        , QString(codeTmpGuardsAdditional).arg(getMemberImpl) + "\n" + structsImpl.join("\n") + ostreamOp.impl);
         }
         case gbp::ContextType::Enum:
         {
+            QStringList membersDecl;
             QStringList members;
+            static const QRegularExpression re("(.+) *=");
 
             for (gbp::Context* child: context->children()) {
                 if (child->type() == gbp::ContextType::EnumItem) {
-                    members << contextToCode(child).decl;
+                    membersDecl << contextToCode(child).decl;
+                    QStringList capt = re.match(membersDecl.last()).capturedTexts();
+                    if (capt.size() > 1) {
+                        members << capt.at(1);
+                    } else {
+                        members << membersDecl.last();
+                    }
                 }
             }
 
             QString fullName = context->name();
             for (gbp::Context* currContext = context;
-                 currContext->parent() && currContext->parent()->type() == gbp::ContextType::Struct;
+                 currContext->parent() && currContext->parent()->type() == gbp::ContextType::DeclStruct;
                  currContext = currContext->parent())
             {
                 fullName = currContext->parent()->name() + "::" + fullName;
@@ -366,8 +399,8 @@ struct CodeGen::Impl
 
             return Code(formatString(codeTmpSimpleEnum
                                    , context->name()
-                                   , members.join(",\n")
-                                   , ostreamOp.decl.arg(context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""))
+                                   , membersDecl.join(",\n")
+                                   , ostreamOp.decl.arg(isStruct(context->parent()) ? "friend " : ""))
                     , ostreamOp.impl);
         }
         case gbp::ContextType::EnumClass:
@@ -384,9 +417,7 @@ struct CodeGen::Impl
             }
 
             QString fullName = context->name();
-            for (gbp::Context* currContext = context;
-                 currContext->parent() && currContext->parent()->type() == gbp::ContextType::Struct;
-                 currContext = currContext->parent())
+            for (gbp::Context* currContext = context; isStruct(currContext->parent()); currContext = currContext->parent())
             {
                 fullName = currContext->parent()->name() + "::" + fullName;
             }
@@ -397,7 +428,7 @@ struct CodeGen::Impl
                                    , context->name()
                                    , underlyingType
                                    , members.join(",\n")
-                                   , ostreamOp.decl.arg(context->parent()->type() == gbp::ContextType::Struct ? "friend " : ""))
+                                   , ostreamOp.decl.arg(isStruct(context->parent()) ? "friend " : ""))
                     , ostreamOp.impl);
         }
         case gbp::ContextType::Member:

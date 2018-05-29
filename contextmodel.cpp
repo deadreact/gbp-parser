@@ -109,7 +109,7 @@ QVariant ContextModel::data(const QModelIndex &index, int role) const
         case ContextType::Comment:
         case ContextType::LineComment:
             return QColor(0x75715e);
-        case ContextType::Struct:
+        case ContextType::DeclStruct:
         case ContextType::Enum:
         case ContextType::EnumClass:
             return QColor(0xf92660);

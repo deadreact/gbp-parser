@@ -13,6 +13,7 @@ namespace gbp
     {
         switch (type) {
         case ContextType::Struct:
+        case ContextType::DeclStruct:
         case ContextType::Member:
         case ContextType::Enum:
         case ContextType::EnumClass:
@@ -92,6 +93,7 @@ namespace gbp
     {
         switch (type()) {
         case ContextType::Struct:
+        case ContextType::DeclStruct:
         case ContextType::Member:
         case ContextType::MemberType:
         case ContextType::MemberValue:
@@ -227,15 +229,19 @@ namespace gbp
         }
         case ContextType::Namespace:
         {
-            if (ref.endsWith("namespace")) {
+            if (ref.endsWith("namespace ")) {
                 return ContextType::Namespace;
+            }
+            if (ref.endsWith("struct ") || ref.endsWith("class ")) {
+                return ContextType::Struct;
             }
             Q_FALLTHROUGH();
         }
         case ContextType::Struct:
+        case ContextType::DeclStruct:
         {
             if (ref.endsWith("GBP_DECLARE_TYPE(")) {
-                return ContextType::Struct;
+                return ContextType::DeclStruct;
             }
             if (ref.endsWith("GBP_DECLARE_ENUM(")) {
                 return ContextType::EnumClass;
@@ -255,7 +261,7 @@ namespace gbp
             return ContextType::UnderlyingType;
         }
 
-        if (current == ContextType::Struct)
+        if (current == ContextType::DeclStruct)
         {
             if (ref.endsWith("(")) {
                 return ContextType::Member;

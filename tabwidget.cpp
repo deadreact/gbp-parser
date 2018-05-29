@@ -12,7 +12,7 @@
 
 #include "checkedfileslist.hpp"
 
-const char* path = "G:\\_msys64_\\home\\Deadreact\\ultima_poker-client\\common\\api\\lobby_stat\\types.h";
+const char* path = "G:\\_msys64_\\home\\Deadreact\\ultima_poker-client\\common\\api\\gbp_int.hpp";
 
 using QActionList = QList<QAction*>;
 
@@ -126,6 +126,8 @@ void TabWidget::on_actionOpenDir_triggered()
 
 void TabWidget::on_actionGenerate_triggered()
 {
+    QSet<QString> filenames;
+
     QList<Page*> pages = findChildren<Page*>();
     QStringList headers;
     QStringList sources;
@@ -143,26 +145,43 @@ void TabWidget::on_actionGenerate_triggered()
             QDir().mkpath(path);
             QString capt = re.match(path).captured(1);
 
-            QString newFilePath = path + "/" + info.baseName() + ".h";
+            QString filename = info.baseName();
+
+            QString newFilePath = path + "/" + filename + "." + info.suffix();
             QSaveFile header(newFilePath + ".tmp");
             if (header.open(QIODevice::WriteOnly)) {
-                headers << ("$$PWD" + capt + "/" + info.baseName() + ".h");
+                headers << ("$$PWD" + capt + "/" + info.baseName() + "." + info.suffix());
                 QTextStream stream(&header);
                 stream.setCodec(QTextCodec::codecForName("UTF-8"));
 //                stream << ("#include \"gbp_int.hpp\"\n");
+//                if (filename.contains("reply") || filename.contains("request")) {
+//                    QString extraInclude = "#pragma once\n#include \"declare_type.h\"\n#include <api" + capt + "/" + info.baseName() + "." + info.suffix() + ">";
+//                    stream << page->declCode().replace("#pragma once", extraInclude);
+//                } else {
+//                }
                 stream << page->declCode();
                 header.commit();
             }
             consoleCommands << QString("G:\\_msys64_\\mingw32\\bin\\clang-format.exe -style=WebKit %0.tmp > %0 && rm %0.tmp").arg(newFilePath).toLatin1();
             if (!page->implCode().isEmpty())
             {
-                newFilePath = path + "/" + info.baseName() + ".cpp";
+                if (filenames.contains(filename))
+                {
+                    QString newFilename = filename + "_0";
+                    for (int i = 0; filenames.contains(newFilename); i++) {
+                        newFilename = filename + QString("_%0").arg(i);
+                    }
+                    filename = newFilename;
+                }
+                filenames.insert(filename);
+
+                newFilePath = path + "/" + filename + ".cpp";
                 QSaveFile cpp(newFilePath + ".tmp");
                 if (cpp.open(QIODevice::WriteOnly)) {
-                    sources << ("$$PWD" + capt + "/" + info.baseName() + ".cpp");
+                    sources << ("$$PWD" + capt + "/" + filename + ".cpp");
                     QTextStream stream(&cpp);
                     stream.setCodec(QTextCodec::codecForName("UTF-8"));
-                    stream << ("#include \"" + info.baseName() + ".h\"\n");
+                    stream << ("#include \"" + info.baseName() + "." + info.suffix() + "\"\n");
                     stream << page->implCode();
                     cpp.commit();
                 }
@@ -201,5 +220,64 @@ include($$PWD/api-gen.pri))";
         stream << consoleCommands.join("\n");
         batStyle.commit();
     }
+
     system(QString("cd %0 && %1").arg(rootPath).arg("api-gen-stylize.bat").toLatin1());
+
+    QSaveFile declTypeFile(rootPath + "/declare_type.h");
+    if (declTypeFile.open(QIODevice::WriteOnly)) {
+        QTextStream stream(&declTypeFile);
+        stream.setCodec(QTextCodec::codecForName("UTF-8"));
+        stream <<
+R"(
+#ifndef _gbp__api__declare_type
+#define _gbp__api__declare_type
+#include "gbp_int.hpp"
+#include <api/declare_type/decorators.hpp>
+#include <api/declare_type/list.hpp>
+#include <api/declare_type/map.hpp>
+#include <api/declare_type/pair.hpp>
+#include <api/declare_type/quoting.hpp>
+#include <api/declare_type/set.hpp>
+#include <api/declare_type/tuple.hpp>
+#include <api/declare_type/unordered_map.hpp>
+#include <api/declare_type/unordered_multimap.hpp>
+#include <api/declare_type/unordered_set.hpp>
+#include <api/declare_type/vector.hpp>
+#define GBP_DECLARE_TYPE(...)
+#define GBP_DECLARE_ENUM(...)
+#define GBP_DECLARE_ENUM_SIMPLE(...)
+template<typename T>
+struct is_gbp_type
+{
+private:
+    typedef char yes;
+    typedef short no;
+
+    template<typename C> static yes test(typename C::types_as_tuple*);
+    template<typename C> static no  test(...);
+public:
+    static const bool value = sizeof(test<T>(0)) == sizeof(yes);
+    typedef T type;
+};
+#endif)";
+        declTypeFile.commit();
+    }
+
+    QSaveFile gbp_intFile(rootPath + "/gbp_int.hpp");
+    if (gbp_intFile.open(QIODevice::WriteOnly)) {
+        QTextStream stream(&gbp_intFile);
+        stream.setCodec(QTextCodec::codecForName("UTF-8"));
+        stream <<
+R"(#pragma once
+
+using gbp_i64 = long long int;
+using gbp_u64 = unsigned long long int;
+using gbp_i32 = int;
+using gbp_u32 = unsigned int;
+using gbp_i16 = short;
+using gbp_u16 = unsigned short;
+using gbp_i8  = signed char;
+using gbp_u8  = unsigned char;)";
+        gbp_intFile.commit();
+    }
 }
