@@ -56,6 +56,7 @@ public:
     virtual ~Page() override;
 
     void init(const QString& filepath);
+    void loadFile(const QString& filepath);
     QToolBar* toolbar() const;
     QString filepath() const;
     QString declCode() const;

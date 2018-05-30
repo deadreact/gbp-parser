@@ -6,6 +6,7 @@
 
 #include <QLineEdit>
 #include <QFileDialog>
+#include <qdebug.h>
 
 void TreeView::currentChanged(const QModelIndex &current, const QModelIndex &previous)
 {
@@ -20,6 +21,7 @@ struct Page::Impl : Ui_page
     ContextModel* m_model;
     CodeGen* m_codegen;
     CodeGen* m_codegenFragment;
+    static const QStringList sm_knownFiles;
 
     Impl()
         : Ui_page()
@@ -46,6 +48,26 @@ struct Page::Impl : Ui_page
     }
 };
 
+const QStringList Page::Impl::sm_knownFiles = QStringList() << "declare_type/decorators.hpp"
+                                                            << "declare_type/list.hpp"
+                                                            << "declare_type/map.hpp"
+                                                            << "declare_type/pair.hpp"
+                                                            << "declare_type/quoting.hpp"
+                                                            << "declare_type/set.hpp"
+                                                            << "declare_type/tuple.hpp"
+                                                            << "declare_type/unordered_map.hpp"
+                                                            << "declare_type/unordered_multimap.hpp"
+                                                            << "declare_type/unordered_set.hpp"
+                                                            << "declare_type/vector.hpp"
+                                                            << "tools/cards.hpp"
+                                                            << "tools/datetimes.hpp"
+                                                            << "tools/filesystem.hpp"
+                                                            << "tools/random.hpp"
+                                                            << "tools/sha1.h"
+                                                            << "tools/syslog_message.h"
+                                                            << "tools/version.hpp"
+                                                            << "tools/version.cpp";
+
 Page::Page(QWidget *parent)
     : QWidget(parent)
     , m_impl(new Impl)
@@ -66,13 +88,22 @@ void Page::init(const QString &filepath)
     m_impl->m_model = new ContextModel(m_impl->m_parser.globalContext(), this);
     m_impl->treeView->setModel(m_impl->m_model);
 
-    connect(m_impl->m_codegen, &CodeGen::declCodeChanged, m_impl->codegenBrowser_decl, &QTextBrowser::setPlainText);
-    connect(m_impl->m_codegen, &CodeGen::implCodeChanged, m_impl->codegenBrowser_impl, &QTextBrowser::setPlainText);
-    connect(m_impl->m_codegenFragment, &CodeGen::declCodeChanged, m_impl->codegenBrowser_fragment_decl, &QTextBrowser::setPlainText);
-    connect(m_impl->m_codegenFragment, &CodeGen::implCodeChanged, m_impl->codegenBrowser_fragment_impl, &QTextBrowser::setPlainText);
+    static const QRegularExpression re("/api/(.+)");
+    QString localPath = re.match(filepath).captured(1);
+//    qDebug() << filepath << localPath;
 
-    m_impl->m_codegen->setModel(m_impl->m_model);
-    m_impl->m_codegenFragment->setModel(m_impl->m_model);
+    if (m_impl->sm_knownFiles.contains(localPath)) {
+        connect(m_impl->codeBrowser, &QTextBrowser::textChanged, this, [this]{ m_impl->codegenBrowser_decl->setPlainText(m_impl->codeBrowser->toPlainText()); });
+    } else {
+        connect(m_impl->m_codegen, &CodeGen::declCodeChanged, m_impl->codegenBrowser_decl, &QTextBrowser::setPlainText);
+        connect(m_impl->m_codegen, &CodeGen::implCodeChanged, m_impl->codegenBrowser_impl, &QTextBrowser::setPlainText);
+        connect(m_impl->m_codegenFragment, &CodeGen::declCodeChanged, m_impl->codegenBrowser_fragment_decl, &QTextBrowser::setPlainText);
+        connect(m_impl->m_codegenFragment, &CodeGen::implCodeChanged, m_impl->codegenBrowser_fragment_impl, &QTextBrowser::setPlainText);
+        m_impl->m_codegen->setModel(m_impl->m_model);
+        m_impl->m_codegenFragment->setModel(m_impl->m_model);
+    }
+
+
 
     if (gbp::Context* c = m_impl->m_parser.globalContext()) {
         m_impl->codeBrowser->setText(c->content().toString());
@@ -91,6 +122,11 @@ void Page::init(const QString &filepath)
         }
     });
 
+    loadFile(filepath);
+}
+
+void Page::loadFile(const QString &filepath)
+{
     if (!filepath.isEmpty()) {
         m_impl->loadFile(filepath);
     }

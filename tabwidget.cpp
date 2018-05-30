@@ -96,9 +96,19 @@ void TabWidget::on_actionOpen_triggered()
 {
     QStringList pathes = QFileDialog::getOpenFileNames(this, QString(), m_impl->m_lastPath);
 
+    QMap<QString, Page*> existing;
+
+    for (Page* page: findChildren<Page*>()) {
+        existing.insert(page->filepath(), page);
+    }
+
     for (const QString& path: pathes) {
-        if (openInANewTab(path)) {
-            m_impl->m_lastPath = path;
+        if (existing.contains(path)) {
+            existing.value(path)->loadFile(path);
+        } else {
+            if (openInANewTab(path)) {
+                m_impl->m_lastPath = path;
+            }
         }
     }
 }
@@ -210,6 +220,7 @@ CONFIG += c++17
 CONFIG += staticlib
 TARGET = gbp-api
 INCLUDEPATH += $$PWD/..
+DEFINES += GBP_DECLARE_TYPE_GEN_ADDITIONALS
 include($$PWD/api-gen.pri))";
         proFile.commit();
     }
@@ -243,6 +254,7 @@ R"(
 #include <api/declare_type/unordered_multimap.hpp>
 #include <api/declare_type/unordered_set.hpp>
 #include <api/declare_type/vector.hpp>
+#include <sstream>
 #define GBP_DECLARE_TYPE(...)
 #define GBP_DECLARE_ENUM(...)
 #define GBP_DECLARE_ENUM_SIMPLE(...)
@@ -259,6 +271,99 @@ public:
     static const bool value = sizeof(test<T>(0)) == sizeof(yes);
     typedef T type;
 };
+namespace _detail {
+    template <typename T, int N = 0>
+    struct apply_helper {
+        template <typename F>
+        static void apply(T* obj, F&& f) {
+            f(T::template member_name<N>(), obj->template get_member<N>());
+            apply_helper<T, N + 1>::apply(obj, std::move(f));
+        }
+        template <typename F>
+        static void apply(const T* obj, F&& f) {
+            f(T::template member_name<N>(), obj->template get_member<N>());
+            apply_helper<T, N + 1>::apply(obj, std::move(f));
+        }
+    };
+
+    template <typename T>
+    struct apply_helper<T, std::tuple_size<typename T::types_as_tuple>::value - 1> {
+        static const int N = std::tuple_size<typename T::types_as_tuple>::value - 1;
+
+        template <typename F>
+        static void apply(T* obj, F&& f) {
+            f(T::template member_name<N>(), obj->template get_member<N>());
+        }
+        template <typename F>
+        static void apply(const T* obj, F&& f) {
+            f(T::template member_name<N>(), obj->template get_member<N>());
+        }
+    };
+
+    template <typename T, int N = 0>
+    struct cmp_helper {
+        template <typename F>
+        static bool cmp(T* obj1, const T* obj2, F&& f) {
+            if (obj1->template get_member<N>() != obj2->template get_member<N>()) {
+                f(T::template member_name<N>(), obj1->template get_member<N>(), obj2->template get_member<N>());
+                cmp_helper<T, N + 1>::cmp(obj1, obj2, std::move(f));
+                return true;
+            }
+            return cmp_helper<T, N + 1>::cmp(obj1, obj2, std::move(f));
+        }
+        template <typename F>
+        static bool cmp(const T* obj1, const T* obj2, F&& f) {
+            if (obj1->template get_member<N>() != obj2->template get_member<N>()) {
+                f(T::template member_name<N>(), obj1->template get_member<N>(), obj2->template get_member<N>());
+                cmp_helper<T, N + 1>::cmp(obj1, obj2, std::move(f));
+                return true;
+            }
+            return cmp_helper<T, N + 1>::cmp(obj1, obj2, std::move(f));
+        }
+    };
+
+    template <typename T>
+    struct cmp_helper<T, std::tuple_size<typename T::types_as_tuple>::value - 1> {
+        static const int N = std::tuple_size<typename T::types_as_tuple>::value - 1;
+
+        template <typename F>
+        static bool cmp(T* obj1, const T* obj2, F&& f) {
+            if (obj1->template get_member<N>() != obj2->template get_member<N>()) {
+                f(T::template member_name<N>(), obj1->template get_member<N>(), obj2->template get_member<N>());
+                return true;
+            }
+            return false;
+        }
+        template <typename F>
+        static bool cmp(const T* obj1, const T* obj2, F&& f) {
+            if (obj1->template get_member<N>() != obj2->template get_member<N>()) {
+                f(T::template member_name<N>(), obj1->template get_member<N>(), obj2->template get_member<N>());
+                return true;
+            }
+            return false;
+        }
+    };
+} //namespace _detail
+
+namespace gbp {
+    template <typename T, typename F>
+    void invoke_apply(T* obj, F&& f) {
+        _detail::apply_helper<T>::apply(obj, std::move(f));
+    }
+    template <typename T, typename F>
+    void invoke_apply(const T* obj, F&& f) {
+        _detail::apply_helper<T>::apply(obj, std::move(f));
+    }
+
+    template <typename T, typename F>
+    bool invoke_cmp(T* obj1, const T* obj2, F&& f) {
+        return _detail::cmp_helper<T>::cmp(obj1, obj2, std::move(f));
+    }
+    template <typename T, typename F>
+    bool invoke_cmp(const T* obj1, const T* obj2, F&& f) {
+        return _detail::cmp_helper<T>::cmp(obj1, obj2, std::move(f));
+    }
+} //namespace gbp
 #endif)";
         declTypeFile.commit();
     }
